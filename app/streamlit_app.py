@@ -9,13 +9,56 @@ from gtts import gTTS
 from streamlit_mic_recorder import mic_recorder
 
 
+# -------------------------------------------------------------------
+# Environment configuration
+# -------------------------------------------------------------------
+
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-FASTAPI_URL = "http://127.0.0.1:8000/api/v1/command"
 
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+def get_secret(name: str):
+    """
+    Read configuration from Streamlit Secrets first,
+    then fall back to environment variables.
 
+    This supports both Streamlit Cloud and local development.
+    """
+
+    try:
+        value = st.secrets.get(name)
+        if value:
+            return value
+    except Exception:
+        pass
+
+    return os.getenv(name)
+
+
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+
+FASTAPI_URL = get_secret("FASTAPI_URL")
+
+if not FASTAPI_URL:
+    FASTAPI_URL = (
+        "http://127.0.0.1:8000/api/v1/command"
+    )
+
+if not GEMINI_API_KEY:
+    st.error(
+        "GEMINI_API_KEY is not configured. "
+        "Add it to your environment variables or Streamlit Secrets."
+    )
+    st.stop()
+
+
+gemini_client = genai.Client(
+    api_key=GEMINI_API_KEY
+)
+
+
+# -------------------------------------------------------------------
+# Streamlit page
+# -------------------------------------------------------------------
 
 st.set_page_config(
     page_title="Smart Home Agent",
@@ -25,6 +68,10 @@ st.set_page_config(
 st.title("🏠 Smart Home Agent")
 st.write("Speak a command or type one below.")
 
+
+# -------------------------------------------------------------------
+# Speech-to-text
+# -------------------------------------------------------------------
 
 def transcribe_audio(audio_bytes: bytes) -> str:
     """
@@ -50,7 +97,9 @@ def transcribe_audio(audio_bytes: bytes) -> str:
         ],
     )
 
-    transcript = (interaction.output_text or "").strip()
+    transcript = (
+        interaction.output_text or ""
+    ).strip()
 
     if not transcript:
         raise ValueError(
@@ -60,10 +109,14 @@ def transcribe_audio(audio_bytes: bytes) -> str:
     return transcript
 
 
+# -------------------------------------------------------------------
+# FastAPI command
+# -------------------------------------------------------------------
+
 def send_command(command: str) -> str:
     """
-    Send the transcribed natural-language command
-    to the FastAPI agent.
+    Send the natural-language command to the
+    deployed FastAPI agent.
     """
 
     response = requests.post(
@@ -83,6 +136,10 @@ def send_command(command: str) -> str:
         "No response was returned by the smart home agent.",
     )
 
+
+# -------------------------------------------------------------------
+# Text-to-speech
+# -------------------------------------------------------------------
 
 def speak_response(text: str):
     """
@@ -107,6 +164,10 @@ def speak_response(text: str):
     )
 
 
+# -------------------------------------------------------------------
+# Voice command interface
+# -------------------------------------------------------------------
+
 st.subheader("🎤 Voice Command")
 
 audio = mic_recorder(
@@ -122,12 +183,16 @@ if audio:
 
     try:
         with st.spinner("Transcribing..."):
-            transcript = transcribe_audio(audio_bytes)
+            transcript = transcribe_audio(
+                audio_bytes
+            )
 
         st.write("**You said:**")
         st.info(transcript)
 
-        with st.spinner("Smart home agent is thinking..."):
+        with st.spinner(
+            "Smart home agent is thinking..."
+        ):
             message = send_command(transcript)
 
         st.write("**Agent:**")
@@ -137,9 +202,14 @@ if audio:
 
     except Exception as exc:
         st.error(
-            f"Speech-to-text or command processing failed: {exc}"
+            "Speech-to-text or command processing "
+            f"failed: {exc}"
         )
 
+
+# -------------------------------------------------------------------
+# Text command interface
+# -------------------------------------------------------------------
 
 st.divider()
 
@@ -147,16 +217,24 @@ st.subheader("⌨️ Text Command")
 
 text_command = st.text_input(
     "Enter a smart-home command",
-    placeholder="I'm heading to bed, secure the house",
+    placeholder=(
+        "I'm heading to bed, secure the house"
+    ),
 )
 
 if st.button("Send Command"):
     if not text_command.strip():
-        st.warning("Please enter a command.")
+        st.warning(
+            "Please enter a smart-home command."
+        )
     else:
         try:
-            with st.spinner("Smart home agent is thinking..."):
-                message = send_command(text_command.strip())
+            with st.spinner(
+                "Smart home agent is thinking..."
+            ):
+                message = send_command(
+                    text_command.strip()
+                )
 
             st.write("**Agent:**")
             st.success(message)

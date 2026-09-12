@@ -22,10 +22,12 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY was not found in .env")
+# Do not fail during module import when running tests or CI.
+# The Gemini client is created only when an API key is available.
+client = None
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY:
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
 MODEL_NAME = "gemini-3.8-flash"
 
@@ -232,6 +234,16 @@ def run_agent(command: str):
     - enforces status-before-action safety
     - prevents unsupported tool calls
     """
+
+    if client is None:
+        return {
+            "success": False,
+            "message": (
+                "Gemini API key is not configured. "
+                "Please configure GEMINI_API_KEY."
+            ),
+            "actions": [],
+        }
 
     system_instruction = """
 You are an autonomous smart-home voice assistant.

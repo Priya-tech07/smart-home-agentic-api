@@ -1,3 +1,4 @@
+
 import io
 import os
 
@@ -124,7 +125,7 @@ def send_command(command: str) -> str:
         json={
             "command": command,
         },
-        timeout=60,
+        timeout=120,
     )
 
     response.raise_for_status()
